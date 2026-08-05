@@ -1,4 +1,4 @@
-# Makleer
+# Makleer.uz
 
 Makleer is a rental marketplace for Uzbekistan that connects estate agents
 (maklers) with customers. This guide explains how to run the website on your own
