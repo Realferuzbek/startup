@@ -1,2 +1,32 @@
+# Netlify build configuration.
+#
+# App Router needs the official adapter: without it Netlify serves the build
+# output as static files, there is no server to run the route handlers, and every
+# dynamic route 404s. Netlify installs this adapter automatically for Next.js
+# sites, but the project also pins it in devDependencies so local and CI builds
+# resolve the same version — see the note at the bottom.
+
+[build]
+  command = "npm run build"
+  # The adapter reads its input from .next and turns it into Netlify functions;
+  # this is not a directory of static files to serve as-is.
+  publish = ".next"
+
 [[plugins]]
-package = "@netlify/plugin-nextjs"
+  package = "@netlify/plugin-nextjs"
+
+# Session refresh and locale routing live in src/proxy.ts (the Next 16 name for
+# what used to be middleware.ts). Next 16 runs it on the Node.js runtime, so it
+# is registered in .next/server/functions-config-manifest.json under
+# "/_middleware" rather than in middleware-manifest.json, which now stays empty.
+# The adapter reads both manifests and picks the Node entry up from the former.
+#
+# It only does so when that entry carries a `matchers` array, which comes from
+# the `export const config = { matcher: [...] }` in src/proxy.ts. Removing that
+# export would make the adapter skip the proxy silently — no build error, but no
+# session refresh and no locale redirects in production. Keep it.
+
+# Not pinned here on purpose: Netlify recommends letting the adapter float so
+# each build gets the version matched to the installed Next.js. The
+# devDependency records the version this project was verified against; drop it
+# if you would rather always take Netlify's latest.
