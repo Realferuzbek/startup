@@ -1,57 +1,24 @@
-import { notFound } from "next/navigation";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { notFound, redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/features/auth/session";
-import {
-  getAmenities,
-  getOwnerProperties,
-  getListingForEdit,
-} from "@/features/listings/queries";
-import { ListingForm } from "@/features/listings/components/listing-form";
 
 type Props = { params: Promise<{ locale: string; id: string }> };
 
-export default async function EditListingPage({ params }: Props) {
+// Editing is keyed by property now. Resolve the old listing-keyed URL to its
+// property — owner-scoped, so a non-owner gets a 404 rather than a hint that the
+// listing exists.
+export default async function LegacyEditListingPage({ params }: Props) {
   const { locale, id } = await params;
-  setRequestLocale(locale);
   const { user } = await requireUser();
-  const t = await getTranslations("listing");
+  const supabase = await createClient();
 
-  const result = await getListingForEdit(user.id, id);
-  if (!result) {
-    notFound();
-  }
-  const { listing, amenityIds } = result;
+  const { data } = await supabase
+    .from("listings")
+    .select("property_id")
+    .eq("id", id)
+    .eq("owner_id", user.id)
+    .maybeSingle();
 
-  const [amenities, properties] = await Promise.all([
-    getAmenities(),
-    getOwnerProperties(user.id),
-  ]);
-
-  return (
-    <main className="mx-auto max-w-lg px-4 py-8 md:px-6">
-      <h1 className="text-h1 text-ink mb-6">{t("edit")}</h1>
-      <ListingForm
-        mode="edit"
-        locale={locale}
-        amenities={amenities}
-        properties={properties}
-        initial={{
-          id: listing.id,
-          property_id: listing.property_id,
-          title: listing.title,
-          description: listing.description,
-          content_language: listing.content_language,
-          price_amount: listing.price_amount,
-          price_currency: listing.price_currency,
-          rental_period: listing.rental_period,
-          rooms: listing.rooms,
-          area_sqm: listing.area_sqm,
-          floor: listing.floor,
-          total_floors: listing.total_floors,
-          available_from: listing.available_from,
-        }}
-        initialAmenityIds={amenityIds}
-      />
-    </main>
-  );
+  if (!data) notFound();
+  redirect(`/${locale}/edit/${data.property_id}`);
 }

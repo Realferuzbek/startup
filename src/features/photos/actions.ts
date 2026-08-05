@@ -101,7 +101,8 @@ export async function uploadPropertyPhoto(
     return { ok: false, error: "uploadFailed" };
   }
 
-  revalidatePath(`/${locale}/edit/property/${propertyId.data}`);
+  revalidatePath(`/${locale}/edit/${propertyId.data}`);
+  revalidatePath(`/${locale}/profile`);
   return { ok: true };
 }
 
@@ -144,7 +145,8 @@ export async function deletePropertyPhoto(
 
   await supabase.storage.from(BUCKET).remove([photo.storage_path]);
 
-  revalidatePath(`/${locale}/edit/property/${photo.property_id}`);
+  revalidatePath(`/${locale}/edit/${photo.property_id}`);
+  revalidatePath(`/${locale}/profile`);
   return { ok: true };
 }
 
@@ -173,6 +175,7 @@ export async function reorderPropertyPhotos(
   });
   if (error) return { ok: false, error: "uploadFailed" };
 
-  revalidatePath(`/${locale}/edit/property/${parsed.data.propertyId}`);
+  revalidatePath(`/${locale}/edit/${parsed.data.propertyId}`);
+  revalidatePath(`/${locale}/profile`);
   return { ok: true };
 }

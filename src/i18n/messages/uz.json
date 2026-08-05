@@ -42,7 +42,8 @@
       "pending": "Koʻrib chiqilmoqda",
       "verified": "Tasdiqlangan",
       "rejected": "Rad etilgan"
-    }
+    },
+    "regionRequired": "Viloyatni tanlang."
   },
   "nav": {
     "primary": "Asosiy menyu",
@@ -84,13 +85,6 @@
     "expiresOn": "Amal qilish muddati:",
     "noProperties": "Eʼlon berish uchun avval obʼekt qoʻshing.",
     "noPropertiesLink": "Obʼekt qoʻshish",
-    "status": {
-      "draft": "Qoralama",
-      "active": "Faol",
-      "paused": "Toʻxtatilgan",
-      "expired": "Muddati tugagan",
-      "removed": "Oʻchirilgan"
-    },
     "titleInvalid": "Sarlavha 10–120 belgidan iborat boʻlsin.",
     "descriptionInvalid": "Tavsif juda uzun.",
     "priceInvalid": "Toʻgʻri narx kiriting.",
@@ -126,6 +120,24 @@
     "noPhotosWarning": "Rasm yoʻq — eʼlon berish uchun kamida bitta rasm qoʻshing.",
     "cannotPublish": "Eʼlon berishdan oldin obʼektga kamida bitta rasm qoʻshing.",
     "lastPhotoActive": "Bu obʼektning faol eʼloni bor — avval eʼlonni toʻxtatib turing."
+  },
+  "post": {
+    "title": "Eʼlon yuklash",
+    "editTitle": "Eʼlonni tahrirlash",
+    "contactTitle": "Bogʻlanish maʼlumotlari",
+    "locationTitle": "Joylashuv",
+    "photosTitle": "Rasmlar",
+    "detailsTitle": "Tafsilotlar",
+    "submit": "Eʼlon berish",
+    "retry": "Qayta urinish",
+    "stepContact": "Bogʻlanish maʼlumotlari saqlanmoqda",
+    "stepProperty": "Uy saqlanmoqda",
+    "stepPhotos": "Rasmlar yuklanmoqda",
+    "stepPublish": "Eʼlon berilmoqda",
+    "photoProgress": "{done}/{total}",
+    "photosRequired": "Kamida bitta rasm qoʻshing.",
+    "partialFailure": "Uy saqlandi — faqat qolgan rasmlar yuklanadi.",
+    "errorGeneric": "Xatolik yuz berdi. Qaytadan urinib koʻring."
   },
   "discovery": {
     "browseTitle": "Ijaraga uy-joy",
@@ -177,8 +189,7 @@
   },
   "home": {
     "metaTitle": "Makleer — Oʻzbekistonda ijara uylari",
-    "metaDescription": "Oʻzbekistonda ijaraga uy toping. Maklerlar va uy egalarining eʼlonlari bir joyda",
-    "footerTagline": "Oʻzbekiston uchun ijara uylari bozori"
+    "metaDescription": "Oʻzbekistonda ijaraga uy toping. Maklerlar va uy egalarining eʼlonlari bir joyda"
   },
   "homes": {
     "title": "Uylarim",
@@ -197,12 +208,13 @@
     "views": "Koʻrishlar: {count}",
     "reveals": "Ochilishlar: {count}",
     "state": {
-      "draft": "Qoralama",
+      "incomplete": "Tugallanmagan",
       "live": "Faol",
       "paused": "Toʻxtatilgan",
       "expired": "Muddati tugagan"
     },
-    "expiringWarning": "{days, plural, other {Eʼlon # kundan soʻng tugaydi}}"
+    "expiringWarning": "{days, plural, other {Eʼlon # kundan soʻng tugaydi}}",
+    "finish": "Tugallash"
   },
   "profile": {
     "title": "Profil",

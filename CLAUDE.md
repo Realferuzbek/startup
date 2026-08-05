@@ -53,19 +53,31 @@ Feature code lives in `src/features/<feature>`. Shared UI in `src/components/sha
 
 Route groups under `src/app/[locale]`: `(site)` owns the chrome (header, footer, bottom bar) for every page so the navigation is defined once; `(site)/(gated)` nests inside it and is the `requireUser()` auth gate for the signed-in surfaces. Admin keeps its own `requireRole("admin")` layout inside `(gated)`.
 
-| Route                                                         | Purpose                                         | Auth       |
-| ------------------------------------------------------------- | ----------------------------------------------- | ---------- |
-| `/[locale]`                                                   | The feed — all active listings                  | none       |
-| `/[locale]/listings/[id]`                                     | Listing detail                                  | none       |
-| `/[locale]/post`, `/[locale]/post/listing`                    | Create a home, then its rental offer            | required   |
-| `/[locale]/edit/property/[id]`, `/[locale]/edit/listing/[id]` | Edit home + photos, edit offer                  | required   |
-| `/[locale]/profile`                                           | Profile hub: Uylarim, Saqlanganlar, Sozlamalar  | required   |
-| `/[locale]/verify/[id]`                                       | Verification submission — **unlinked**          | required   |
-| `/[locale]/admin/**`                                          | Admin, role-gated, **never linked from the UI** | admin only |
+| Route                         | Purpose                                         | Auth       |
+| ----------------------------- | ----------------------------------------------- | ---------- |
+| `/[locale]`                   | The feed — all active listings                  | none       |
+| `/[locale]/listings/[id]`     | Listing detail                                  | none       |
+| `/[locale]/post`              | Post a listing — one page, one submit           | required   |
+| `/[locale]/edit/[propertyId]` | The same form, prefilled                        | required   |
+| `/[locale]/profile`           | Profile hub: Uylarim, Saqlanganlar, Sozlamalar  | required   |
+| `/[locale]/verify/[id]`       | Verification submission — **unlinked**          | required   |
+| `/[locale]/admin/**`          | Admin, role-gated, **never linked from the UI** | admin only |
 
 `/[locale]/listings` redirects to `/[locale]` preserving the query string; `/[locale]/dashboard/**` redirects to `/[locale]/profile` via one optional catch-all.
 
-**Navigation is exactly three destinations** — Bosh sahifa (`/`), Eʼlon yuklash (`/post`), Profil (`/profile`, labelled Kirish → `/login` when signed out) — defined once in `src/features/navigation/nav-items.ts` and rendered by a desktop header and a fixed mobile bottom bar. Do not add a fourth. The admin link is never rendered; admins type the URL.
+**Navigation is exactly three destinations** — Bosh sahifa (`/`), Eʼlon yuklash (`/post`), Profil (`/profile`, labelled Kirish → `/login` when signed out) — defined once in `src/features/navigation/nav-items.ts` and rendered by a desktop header and a fixed mobile bottom bar. Do not add a fourth. The admin link is never rendered; admins type the URL. **There is no footer on any page.**
+
+`/[locale]/post/listing`, `/[locale]/edit/property/[id]` and `/[locale]/edit/listing/[id]` survive only as redirect stubs.
+
+## Posting
+
+**Posting is one page with one submit, and it publishes a live listing.** `src/features/post/` owns it; the same `PostForm` drives create and edit.
+
+- **There are no drafts.** `draft` stays in the `listing_status` enum (removing it would need a migration) but is **never written**. `HomeState.incomplete` covers a property whose posting run stopped before its listing existed, plus any legacy `draft` row; it is labelled "Tugallanmagan" and never called a draft.
+- The order property → photos → listing is forced by the data model (photos need a `property_id`; `PH001` needs the photo rows). The **client** orchestrates it across narrow non-redirecting server actions and shows the phases; **all validation runs first**, against the same zod schemas the server uses, so a validation error never leaves a partial record.
+- A failed photo upload keeps the property and does **not** publish. Retrying skips the completed phases.
+- `publishNewListing` **inserts the listing already `active`** rather than going through `create_listing` (which can only make a draft) and then updating. The lifecycle trigger's INSERT branch runs the same `PH001`/`CT001` gates, and this leaves no window in which a draft row exists — a draft would make the property permanently undeletable. Amenities are inserted immediately after, the one thing the RPC did in the same transaction.
+- The contact section renders only when the profile cannot satisfy `CT001`.
 
 ## Data model
 
@@ -74,7 +86,7 @@ Route groups under `src/app/[locale]`: `(site)` owns the chrome (header, footer,
 - `listings.owner_id` is denormalized from the parent property and maintained by the `set_listing_owner` BEFORE INSERT/UPDATE trigger. It is authoritative and **never client-supplied** — any client value is overwritten from `properties.owner_id`.
 - **Row Level Security is mandatory on every table.** Any new table MUST `enable row level security` and ship explicit policies (and explicit grants — the Supabase cloud default does not auto-grant new tables) in the same migration that creates it. Use the `public.is_admin()` SECURITY DEFINER helper for admin checks to avoid recursive policy evaluation on `profiles`.
 - **Amenities** use a localized reference table (`amenities`) + a join table (`listing_amenities`), exactly like regions/districts — localizable without `ALTER TYPE`, never an enum array. Add new amenities by seeding rows, not by migrating a type.
-- **Listing status transitions and the 30-day expiry are DB-enforced** by the `enforce_listing_lifecycle` trigger (`draft/active/paused/expired` graph; `removed` is terminal; entering `active` sets `expires_at = now() + 30 days`). Status moves only through the dedicated server actions, never a form field.
+- **Listing status transitions and the 30-day expiry are DB-enforced** by the `enforce_listing_lifecycle` trigger (`draft/active/paused/expired` graph; `removed` is terminal; entering `active` sets `expires_at = now() + 30 days`). Its INSERT branch permits a row born `active`, applying the same gates. Status moves only through the dedicated server actions, never a form field. The app no longer writes `draft` — see Posting above.
 - **Public listing visibility is time-filtered, not status-only:** `status = 'active' AND (expires_at IS NULL OR expires_at > now())`. A time-expired listing is invisible to the public even before a status flip runs; `property_photos` and `listing_amenities` public reads use the same filter. A daily `pg_cron` job (`expire-listings`) flips time-expired rows to `expired` for the host dashboard label — correctness never depends on it.
 - **A listing cannot become `active` unless its property has ≥1 `property_photos` row** — enforced inside `enforce_listing_lifecycle` (distinct SQLSTATE `PH001`, surfaced to hosts as an actionable message). Price ceilings are **currency-aware** and enforced at both the Zod boundary and the DB CHECK: UZS ≤ 1,000,000,000, USD ≤ 1,000,000 (both > 0).
 - Migrations live in `supabase/migrations/`. Apply with `npm run db:push`; regenerate types with `npm run db:types`; prove RLS with `npm run test:rls`.

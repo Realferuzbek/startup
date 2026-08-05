@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { navItems, isActive } from "../nav-items";
+import { NavPending } from "./nav-pending";
 
 const navLink =
   "rounded-sm text-small transition-colors hover:text-registry " +
@@ -33,6 +34,7 @@ export function HeaderNav({ signedIn }: { signedIn: boolean }) {
             }
           >
             {t(item.labelKey)}
+            <NavPending />
           </Link>
         );
       })}

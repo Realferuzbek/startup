@@ -14,17 +14,16 @@ const initial: ListingFormState = { status: "idle" };
 // State-specific actions for a home card. Publish/resume/republish are all the
 // one publishListing action (label differs by state); pause is pauseListing;
 // delete is the property delete (which refuses when listing history exists).
-// Nothing is silently disabled — a draft's primary action names its blocker.
+// An incomplete home offers only the two things worth doing to it: finish it in
+// the post form, or remove it. Nothing is ever silently disabled.
 export function HomeActions({
   state,
   propertyId,
   listingId,
-  photoCount,
 }: {
   state: HomeState;
   propertyId: string;
   listingId: string | null;
-  photoCount: number;
 }) {
   const t = useTranslations("homes");
   const tl = useTranslations("listing");
@@ -44,9 +43,8 @@ export function HomeActions({
     (pauseState.status === "error" && pauseState.error) ||
     null;
 
-  const editHref = listingId
-    ? `/edit/listing/${listingId}`
-    : `/edit/property/${propertyId}`;
+  // Editing is keyed by property: one form covers the home and its offer.
+  const editHref = `/edit/${propertyId}`;
 
   const publishForm = (label: string) => (
     <form action={publishAction}>
@@ -60,35 +58,24 @@ export function HomeActions({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <Link
-          href={editHref}
-          className={buttonVariants({ variant: "secondary", size: "sm" })}
-        >
-          {t("edit")}
-        </Link>
-
-        {state === "draft" ? (
+        {state === "incomplete" ? (
           <>
-            {photoCount === 0 ? (
-              <Link
-                href={`/edit/property/${propertyId}`}
-                className={buttonVariants({ variant: "primary", size: "sm" })}
-              >
-                {t("addPhoto")}
-              </Link>
-            ) : listingId ? (
-              publishForm(t("publish"))
-            ) : (
-              <Link
-                href="/post/listing"
-                className={buttonVariants({ variant: "primary", size: "sm" })}
-              >
-                {t("publish")}
-              </Link>
-            )}
+            <Link
+              href={editHref}
+              className={buttonVariants({ variant: "primary", size: "sm" })}
+            >
+              {t("finish")}
+            </Link>
             <DeletePropertyButton id={propertyId} />
           </>
-        ) : null}
+        ) : (
+          <Link
+            href={editHref}
+            className={buttonVariants({ variant: "secondary", size: "sm" })}
+          >
+            {t("edit")}
+          </Link>
+        )}
 
         {state === "live" && listingId ? (
           <>

@@ -3,7 +3,11 @@
 // property + time-bound listings) stays underneath; a host only ever sees one
 // home with a state.
 
-export type HomeState = "draft" | "live" | "paused" | "expired";
+// Posting goes straight to `active`, so nothing here ever produces a draft any
+// more. `incomplete` is the residue: a property whose posting run stopped before
+// its listing was created, plus any legacy `draft` row. It is never called a
+// draft in the UI — it is simply unfinished.
+export type HomeState = "incomplete" | "live" | "paused" | "expired";
 
 export type HomeListing = {
   id: string;
@@ -18,7 +22,7 @@ export type HomeListing = {
 };
 
 // The listing that represents a property's current offer: the active one if
-// present, else the newest non-removed. null → the home has no offer (a draft).
+// present, else the newest non-removed. null → the home has no offer yet.
 export function currentListing(listings: HomeListing[]): HomeListing | null {
   const candidates = listings.filter((l) => l.status !== "removed");
   if (candidates.length === 0) return null;
@@ -33,7 +37,9 @@ export function currentListing(listings: HomeListing[]): HomeListing | null {
 
 // The single source of derived state.
 export function deriveHomeState(listing: HomeListing | null): HomeState {
-  if (!listing || listing.status === "draft") return "draft";
+  // A legacy `draft` row still reads as incomplete — the enum value survives in
+  // the database, it is just never written any more.
+  if (!listing || listing.status === "draft") return "incomplete";
   if (listing.status === "paused") return "paused";
   if (listing.status === "expired") return "expired";
   if (listing.status === "active") {
@@ -47,5 +53,5 @@ export function deriveHomeState(listing: HomeListing | null): HomeState {
     }
     return "live";
   }
-  return "draft";
+  return "incomplete";
 }

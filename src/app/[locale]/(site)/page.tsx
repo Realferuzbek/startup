@@ -46,6 +46,17 @@ export async function generateMetadata({
       siteName: "Makleer",
       url,
       locale: locale === "ru" ? "ru_RU" : "uz_UZ",
+      // Naming an openGraph object here replaces the one the file convention
+      // would have contributed, so the generated card has to be re-attached by
+      // hand or the page ships with no og:image at all.
+      images: [
+        {
+          url: `/${locale}/opengraph-image`,
+          width: 1200,
+          height: 630,
+          alt: "Makleer",
+        },
+      ],
     },
   };
 }
@@ -117,7 +128,10 @@ export default async function FeedPage({ params, searchParams }: Props) {
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {/* 1 / 2 / 3 columns. `xl` here meant 1280px while the page caps at
+              1200px, so the feed was 2-up at every real desktop width and a
+              single card rendered ~568px wide with a 426px-tall photo. */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {listings.map((c) => (
               <ListingCard
                 key={c.id}

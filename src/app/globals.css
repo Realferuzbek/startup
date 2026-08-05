@@ -121,6 +121,26 @@
   }
 }
 
+/*
+  Navigation pending hint (useLinkStatus). The dot always occupies its space and
+  only fades in, so a click never shifts the label. The 120ms delay means an
+  instant navigation shows nothing at all — the indicator is for the wait, not
+  for the click.
+*/
+.nav-pending {
+  display: inline-block;
+  width: 0.375rem;
+  height: 0.375rem;
+  margin-inline-start: 0.375rem;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1) 120ms;
+}
+.nav-pending[data-pending] {
+  opacity: 0.5;
+}
+
 /* Reduced motion is non-negotiable: collapse every transition/animation. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -130,5 +150,16 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /*
+    The blanket rule collapses the fade to 0.01ms but leaves the 120ms delay,
+    which reads as a stutter. Drop the transition outright: the dot becomes a
+    static indicator that appears the moment a navigation is pending. A
+    prefetched route skips the pending phase entirely, so this never flashes on
+    an instant navigation.
+  */
+  .nav-pending {
+    transition: none !important;
   }
 }

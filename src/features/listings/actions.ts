@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getLocale } from "next-intl/server";
@@ -8,6 +7,32 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/features/auth/session";
 import { listingSchema, type ListingFormState } from "./schema";
 import type { ListingStatus } from "./queries";
+
+// Result of the non-redirecting actions the one-step post form drives.
+export type ListingResult =
+  { ok: true; id: string } | { ok: false; error: string };
+
+// Every way the database can refuse to make a listing live, in one table, so the
+// born-active insert and the status transitions below can never drift apart.
+// PH001 = no property photo; CT001 = owner has no name/phone; 23514 = invalid
+// status transition; 23505 = the one-active-listing-per-property index;
+// 42501 = RLS violation, i.e. the property is not the caller's.
+function mapListingError(code: string | undefined): string {
+  switch (code) {
+    case "PH001":
+      return "needsPhotos";
+    case "CT001":
+      return "contactRequired";
+    case "23514":
+      return "invalidTransition";
+    case "23505":
+      return "activeListingExists";
+    case "42501":
+      return "notOwner";
+    default:
+      return "errorGeneric";
+  }
+}
 
 // Maps the first Zod issue to an i18n key under the `listing` namespace.
 function firstErrorKey(issues: z.core.$ZodIssue[]): string {
@@ -79,72 +104,101 @@ async function assertAmenitiesExist(
   return amenityIds.every((id) => valid.has(id));
 }
 
-export async function createListing(
-  _prevState: ListingFormState,
+// Phase 4 of the one-step post: create the listing ALREADY ACTIVE.
+//
+// enforce_listing_lifecycle's INSERT branch runs the same PH001 (>=1 photo) and
+// CT001 (owner name + phone) gates as a publish, and backfills expires_at — so a
+// listing can be born active. The alternative, create_listing (which can only
+// produce a draft) followed by a status update, opens a window where a draft row
+// exists: if that update then failed, the draft would make the property
+// permanently undeletable, since deleteProperty refuses on ANY listing history.
+// Born-active has no such window — it either succeeds or creates nothing.
+//
+// The cost is inserting listing_amenities separately (create_listing did that in
+// the same transaction). If only that second statement fails the listing is live
+// but untagged, which the edit form fixes — strictly better than never going live.
+export async function publishNewListing(
   formData: FormData,
-): Promise<ListingFormState> {
-  await requireUser();
+): Promise<ListingResult> {
+  const { user } = await requireUser();
   const supabase = await createClient();
   const locale = await getLocale();
 
   const parsed = parseListing(formData);
   if (!parsed.success) {
-    return { status: "error", error: firstErrorKey(parsed.error.issues) };
+    return { ok: false, error: firstErrorKey(parsed.error.issues) };
   }
   const d = parsed.data;
 
   if (!(await assertAmenitiesExist(supabase, d.amenity_ids))) {
-    return { status: "error", error: "amenityInvalid" };
+    return { ok: false, error: "amenityInvalid" };
   }
 
-  const { error } = await supabase.rpc("create_listing", {
-    p_property_id: d.property_id,
-    p_title: d.title,
-    p_content_language: d.content_language,
-    p_price_amount: d.price_amount,
-    p_description: d.description ?? undefined,
-    p_price_currency: d.price_currency,
-    p_rental_period: d.rental_period,
-    p_rooms: d.rooms ?? undefined,
-    p_area_sqm: d.area_sqm ?? undefined,
-    p_floor: d.floor ?? undefined,
-    p_total_floors: d.total_floors ?? undefined,
-    p_available_from: d.available_from ?? undefined,
-    p_amenity_ids: d.amenity_ids,
-  });
-  if (error) {
-    // 42501 = RLS violation → the property is not the caller's.
-    return {
-      status: "error",
-      error: error.code === "42501" ? "notOwner" : "errorGeneric",
-    };
+  // owner_id is the session's user so the row satisfies the RLS WITH CHECK.
+  // It is not authoritative: the set_listing_owner BEFORE trigger overwrites it
+  // from properties.owner_id, so a forged value cannot claim someone's property.
+  const { data, error } = await supabase
+    .from("listings")
+    .insert({
+      owner_id: user.id,
+      property_id: d.property_id,
+      title: d.title,
+      description: d.description,
+      content_language: d.content_language,
+      price_amount: d.price_amount,
+      price_currency: d.price_currency,
+      rental_period: d.rental_period,
+      rooms: d.rooms,
+      area_sqm: d.area_sqm,
+      floor: d.floor,
+      total_floors: d.total_floors,
+      available_from: d.available_from,
+      status: "active",
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: mapListingError(error?.code) };
+  }
+
+  if (d.amenity_ids.length > 0) {
+    await supabase.from("listing_amenities").insert(
+      d.amenity_ids.map((amenity_id) => ({
+        listing_id: data.id,
+        amenity_id,
+      })),
+    );
   }
 
   revalidatePath(`/${locale}/profile`);
-  redirect(`/${locale}/profile`);
+  revalidatePath(`/${locale}`);
+  return { ok: true, id: data.id };
 }
 
-export async function updateListing(
-  _prevState: ListingFormState,
+// The edit-form counterpart. Updates the listing's fields via the existing RPC,
+// then makes sure it is live: a legacy `draft` row (from before one-step posting)
+// is moved to active here, which is what "finish an incomplete home" does.
+export async function updatePostListing(
   formData: FormData,
-): Promise<ListingFormState> {
+): Promise<ListingResult> {
   await requireUser();
   const supabase = await createClient();
   const locale = await getLocale();
 
   const id = z.uuid().safeParse(formData.get("id"));
   if (!id.success) {
-    return { status: "error", error: "errorGeneric" };
+    return { ok: false, error: "errorGeneric" };
   }
 
   const parsed = parseListing(formData);
   if (!parsed.success) {
-    return { status: "error", error: firstErrorKey(parsed.error.issues) };
+    return { ok: false, error: firstErrorKey(parsed.error.issues) };
   }
   const d = parsed.data;
 
   if (!(await assertAmenitiesExist(supabase, d.amenity_ids))) {
-    return { status: "error", error: "amenityInvalid" };
+    return { ok: false, error: "amenityInvalid" };
   }
 
   const { error } = await supabase.rpc("update_listing", {
@@ -163,11 +217,28 @@ export async function updateListing(
     p_amenity_ids: d.amenity_ids,
   });
   if (error) {
-    return { status: "error", error: "errorGeneric" };
+    return { ok: false, error: "errorGeneric" };
+  }
+
+  const { data: row } = await supabase
+    .from("listings")
+    .select("status")
+    .eq("id", id.data)
+    .maybeSingle();
+
+  if (row?.status === "draft") {
+    const { error: publishError } = await supabase
+      .from("listings")
+      .update({ status: "active" })
+      .eq("id", id.data);
+    if (publishError) {
+      return { ok: false, error: mapListingError(publishError.code) };
+    }
   }
 
   revalidatePath(`/${locale}/profile`);
-  redirect(`/${locale}/profile`);
+  revalidatePath(`/${locale}`);
+  return { ok: true, id: id.data };
 }
 
 // Status changes go ONLY through these dedicated actions — never a form field.
@@ -191,19 +262,7 @@ async function changeStatus(
     .eq("id", id.data)
     .select("id");
   if (error) {
-    // PH001 = photo gate; CT001 = owner has no name/phone; 23514 = invalid
-    // transition; 23505 = the one-active-per-property partial unique index.
-    const key =
-      error.code === "PH001"
-        ? "needsPhotos"
-        : error.code === "CT001"
-          ? "contactRequired"
-          : error.code === "23514"
-            ? "invalidTransition"
-            : error.code === "23505"
-              ? "activeListingExists"
-              : "errorGeneric";
-    return { status: "error", error: key };
+    return { status: "error", error: mapListingError(error.code) };
   }
   if (!data || data.length === 0) {
     return { status: "error", error: "notFound" };

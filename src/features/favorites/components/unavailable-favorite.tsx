@@ -45,7 +45,7 @@ export function UnavailableFavorite({
             src={coverUrl}
             alt=""
             fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 300px"
+            sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 380px"
             className="object-cover opacity-60 grayscale"
           />
         ) : (

@@ -33,7 +33,6 @@ export default async function ProfilePage({ params, searchParams }: Props) {
       <MyHomesSection userId={user.id} locale={locale} />
       <SavedSection locale={locale} />
       <SettingsSection
-        locale={locale}
         fullName={profile?.full_name ?? ""}
         phone={profile?.phone ?? ""}
         telegram={profile?.telegram_username ?? ""}

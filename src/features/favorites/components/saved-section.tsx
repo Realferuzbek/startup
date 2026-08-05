@@ -50,7 +50,7 @@ export async function SavedSection({ locale }: { locale: string }) {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {favorites.map((f) => {
             const district = districtName(f.district_id);
             const location = [district, regionName(f.region_id)]

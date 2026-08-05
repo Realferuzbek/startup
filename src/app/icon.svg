@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" role="img" aria-label="Makleer">
+  <title>Makleer</title>
+  <!--
+    The girih mark as a favicon — a deliberately SIMPLIFIED variant, not the
+    component in src/components/shared/girih.tsx.
+
+    Two things break the true mark at 16px, and they were both measured, not
+    guessed (render icon.svg at 16 and zoom it nearest-neighbour to see):
+
+      1. The component strokes the outline at 1.5px. At 16px that lands on ~1
+         device pixel with sub-pixel gaps between the points — a smudge. Fixed
+         by filling instead of stroking.
+      2. The true girih valley radius is r = sqrt(2-sqrt(2)) * R = 0.765 * R,
+         because that is where the two rotated squares actually intersect. At
+         16px the points then protrude barely 1.3px and the filled star reads as
+         a circle. Fixed by deepening the valleys to r = 0.48 * R, which pushes
+         each point out to ~3.6px and makes eight of them unmistakable.
+
+    So this file keeps the mark's identity — an eight-pointed star, same eight
+    axes, same registry square — while trading exact girih geometry for
+    legibility at the one size that needs it. apple-icon and opengraph-image are
+    rendered large enough to use the true geometry, and do.
+
+    Vertices: outer R = 10.5 every 45 degrees, inner r = 5.04 at 22.5 degrees
+    between, about centre (12,12), in a 24-unit box.
+  -->
+  <rect width="24" height="24" rx="5" fill="#1b4b8f"/>
+  <path
+    fill="#ffffff"
+    d="M12 1.5 L13.9287 7.3436 L19.4246 4.5754 L16.6564 10.0713 L22.5 12 L16.6564 13.9287 L19.4246 19.4246 L13.9287 16.6564 L12 22.5 L10.0713 16.6564 L4.5754 19.4246 L7.3436 13.9287 L1.5 12 L7.3436 10.0713 L4.5754 4.5754 L10.0713 7.3436 Z"
+  />
+</svg>

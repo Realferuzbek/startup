@@ -49,7 +49,7 @@ export async function ListingCard({
               src={card.coverUrl}
               alt=""
               fill
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 300px"
+              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 380px"
               className="object-cover"
             />
           ) : (

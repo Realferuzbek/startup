@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { revealContact, type RevealState } from "@/features/reveal/actions";
@@ -32,13 +32,18 @@ export function ContactReveal({
   const [state, formAction, pending] = useActionState(revealContact, initial);
   const pathname = usePathname();
   const router = useRouter();
+  // Leaving for the login page is a navigation, not a form post — it needs its
+  // own pending state or the button looks dead on a slow connection.
+  const [leaving, startLeaving] = useTransition();
 
   // Shown contact: an existing reveal (server-provided) or this session's reveal.
   const contact =
     initialContact ?? (state.status === "revealed" ? state.contact : null);
 
   function goLogin() {
-    router.push(`/${locale}/login?next=${encodeURIComponent(pathname)}`);
+    startLeaving(() =>
+      router.push(`/${locale}/login?next=${encodeURIComponent(pathname)}`),
+    );
   }
 
   if (contact) {
@@ -105,7 +110,12 @@ export function ContactReveal({
       ) : (
         <>
           <p className="text-small text-ink-secondary">{t("signedOutHelp")}</p>
-          <Button type="button" onClick={goLogin} className="w-full">
+          <Button
+            type="button"
+            onClick={goLogin}
+            loading={leaving}
+            className="w-full"
+          >
             {t("signIn")}
           </Button>
         </>

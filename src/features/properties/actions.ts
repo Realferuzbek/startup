@@ -8,6 +8,11 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/features/auth/session";
 import { makePropertySchema, type PropertyFormState } from "./schema";
 
+// Result of the non-redirecting actions the one-step post form drives. The
+// `useActionState`-shaped `deleteProperty` below keeps PropertyFormState.
+export type PropertyResult =
+  { ok: true; id: string } | { ok: false; error: string };
+
 // Maps the first Zod issue to an i18n key under the `property` namespace.
 function firstErrorKey(issues: z.core.$ZodIssue[]): string {
   const issue = issues[0];
@@ -64,20 +69,22 @@ function parseFields(formData: FormData, tashkentCityId: number) {
   return { ok: true as const, data: parsed.data };
 }
 
-export async function createProperty(
-  _prevState: PropertyFormState,
+// Phase 2 of the one-step post. Same validation and the same create_property
+// RPC as ever, but it RETURNS the new id instead of redirecting: the client
+// needs it for the photo storage paths and for the listing that follows.
+// (create_property has always been `returns uuid`; the old action discarded it.)
+export async function createPostProperty(
   formData: FormData,
-): Promise<PropertyFormState> {
+): Promise<PropertyResult> {
   await requireUser();
   const supabase = await createClient();
-  const locale = await getLocale();
 
   const result = parseFields(formData, await tashkentCityRegionId(supabase));
   if (!result.ok) {
-    return { status: "error", error: result.error };
+    return { ok: false, error: result.error };
   }
 
-  const { error } = await supabase.rpc("create_property", {
+  const { data, error } = await supabase.rpc("create_property", {
     p_region_id: result.data.region_id,
     // The SQL param is nullable (a property outside Tashkent city has no
     // district); the generated type under-describes it as non-null.
@@ -86,47 +93,47 @@ export async function createProperty(
     p_latitude: result.data.latitude,
     p_longitude: result.data.longitude,
   });
-  if (error) {
-    return { status: "error", error: "errorGeneric" };
+  if (error || !data) {
+    return { ok: false, error: "errorGeneric" };
   }
 
-  revalidatePath(`/${locale}/profile`);
-  redirect(`/${locale}/profile`);
+  return { ok: true, id: data };
 }
 
-export async function updateProperty(
-  _prevState: PropertyFormState,
+// The edit-form counterpart: updates the property's fields and returns, leaving
+// the caller to continue with the listing half of the same submit.
+export async function updatePostProperty(
   formData: FormData,
-): Promise<PropertyFormState> {
+): Promise<PropertyResult> {
   await requireUser();
   const supabase = await createClient();
   const locale = await getLocale();
 
   const id = z.uuid().safeParse(formData.get("id"));
   if (!id.success) {
-    return { status: "error", error: "errorGeneric" };
+    return { ok: false, error: "errorGeneric" };
   }
 
   const result = parseFields(formData, await tashkentCityRegionId(supabase));
   if (!result.ok) {
-    return { status: "error", error: result.error };
+    return { ok: false, error: result.error };
   }
 
   const { error } = await supabase.rpc("update_property", {
     p_id: id.data,
     p_region_id: result.data.region_id,
-    // Nullable in SQL; see note in createProperty.
+    // Nullable in SQL; see note in createPostProperty.
     p_district_id: result.data.district_id as number,
     p_address_line: result.data.address_line,
     p_latitude: result.data.latitude,
     p_longitude: result.data.longitude,
   });
   if (error) {
-    return { status: "error", error: "errorGeneric" };
+    return { ok: false, error: "errorGeneric" };
   }
 
   revalidatePath(`/${locale}/profile`);
-  redirect(`/${locale}/profile`);
+  return { ok: true, id: id.data };
 }
 
 export async function deleteProperty(

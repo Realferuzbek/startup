@@ -108,12 +108,15 @@ Framer Motion may be used, but if a CSS transition does the job, use CSS.
 
 An eight-pointed star formed by two overlapping squares rotated 45° from each other — the geometry underlying Central Asian panjara screens. Drawn as inline SVG, 1.5px stroke, no fill, in `--registry` or `--verified` depending on context.
 
-It appears in exactly three places:
-1. **The verification mark** on verified listings — the primary use
-2. **Empty states** — at low opacity, large, as the only illustration in the product
-3. **Loading skeletons** — as a subtle repeating lattice
+It appears in exactly four places:
+1. **The brand lockup** — immediately left of the "Makleer" wordmark in the header, at 20px, optically centred on the wordmark rather than sat on its baseline. The mark IS the brand, so it also becomes the app icon (`icon.svg`, `apple-icon`) and the Open Graph card. *(Chunk R2 — this use did not exist when the rule below was first written.)*
+2. **The verification mark** on verified listings
+3. **Empty states** — at low opacity, large, as the only illustration in the product
+4. **Loading skeletons** — as a subtle repeating lattice
 
-It appears nowhere else. Not in the header, not as a background texture, not as a decorative divider. Its power depends entirely on scarcity.
+It appears nowhere else. Not as a background texture, not as a decorative divider, never twice on one screen. Its power still depends on scarcity — the lockup is one instance, in one fixed position.
+
+**The icon is the one permitted variation.** At 16px a 1.5px non-scaling stroke lands on ~1 device pixel and the eight points fill in, so `src/app/icon.svg` uses the identical 16-vertex silhouette **filled** in `--surface`, reversed out of a solid `--registry` square. Fill survives rasterization; a hairline does not. Everywhere else the mark stays stroke-only.
 
 ## Components
 

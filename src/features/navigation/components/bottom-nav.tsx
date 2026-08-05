@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { navItems, isActive, type NavKey } from "../nav-items";
+import { NavPending } from "./nav-pending";
 
 // Icons are hand-inlined SVG, as everywhere else in this project — 1.5px
 // stroke, currentColor, no fill, no icon dependency pulled into the interior.
@@ -66,6 +67,7 @@ export function BottomNav({ signedIn }: { signedIn: boolean }) {
                 </svg>
                 <span className="text-caption text-center leading-none">
                   {t(item.labelKey)}
+                  <NavPending />
                 </span>
               </Link>
             </li>

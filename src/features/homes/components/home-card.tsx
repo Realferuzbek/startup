@@ -15,10 +15,10 @@ function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
 }
 
-// Distinct treatment per state so draft and live never look alike. The
+// Distinct treatment per state so incomplete and live never look alike. The
 // `verified` variant stays reserved for ownership verification.
 const STATE_VARIANT: Record<HomeState, NonNullable<BadgeProps["variant"]>> = {
-  draft: "neutral",
+  incomplete: "neutral",
   live: "registry",
   paused: "warning",
   expired: "warning",
@@ -51,13 +51,13 @@ export async function HomeCard({
 
   return (
     <Card className="flex flex-col overflow-hidden p-0">
-      <div className="bg-rule relative aspect-[16/9] w-full overflow-hidden">
+      <div className="bg-rule relative aspect-[4/3] w-full overflow-hidden">
         {home.coverUrl ? (
           <Image
             src={home.coverUrl}
             alt=""
             fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 380px"
+            sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 380px"
             className="object-cover"
           />
         ) : (
@@ -144,7 +144,6 @@ export async function HomeCard({
           state={home.state}
           propertyId={home.propertyId}
           listingId={home.listing?.id ?? null}
-          photoCount={home.photoCount}
         />
       </div>
     </Card>

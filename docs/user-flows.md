@@ -34,9 +34,16 @@ Do not delete verification code, tables, columns, or policies.
 
 Every listing is a rental. **Sale listings are planned** and are deliberately not built yet. There is no `listing_type` column and no sale UI. Nothing in the current structure should make sale harder to add later: when it lands it will be a new discriminator on `listings` plus a filter, not a restructure.
 
-### Drafts
+### There are no drafts
 
-A new home still saves as a **draft** and publishing is still a separate, deliberate action. **Drafts are being removed in the next chunk (R2), not this one** — the multi-step property → photos → listing → publish flow described below is what exists today and it must keep working until R2 replaces it.
+Posting is one page and one button, and it produces a **live listing immediately**. There is no draft state, no separate publish step, and the word "Qoralama" appears nowhere in the product.
+
+The `draft` value stays in the `listing_status` enum — removing it would need a migration, and the schema is unchanged — it is simply never written any more. Two things still map to it:
+
+- A property whose posting run stopped after the property was created but before its listing was published (a failed photo upload, or an abandoned page).
+- Any legacy `draft` row from before this chunk.
+
+Both surface in Uylarim as **Tugallanmagan**, never as a draft, with exactly two actions: **Tugallash**, which opens the same post form prefilled and finishes the job, or delete. Deletion works whenever the property has no listing history; when it does, the database refuses (a property is never cascade-deleted out from under its listings) and finishing is the way forward.
 
 ---
 
@@ -81,9 +88,13 @@ These rules are not negotiable and no screen below may violate them.
 | 2   | Eʼlon yuklash | `/[locale]/post`    | same (the page itself asks for sign-in)          |
 | 3   | Profil        | `/[locale]/profile` | labelled **Kirish**, routes to `/[locale]/login` |
 
-**Desktop (`md` and up):** a header — wordmark on the left, the three destinations plus the locale switcher on the right.
+**Desktop (`md` and up):** a header — the girih mark and "Makleer" wordmark on the left, the three destinations plus the locale switcher on the right.
 
-**Mobile (below `md`):** a **fixed bottom navigation bar** with the three destinations, each an icon above a label, with a clear active state marked by colour _and_ a rule (never colour alone). The header collapses to the wordmark and the locale switcher. Page content is never obscured: the bar is `fixed`, and the site layout reserves its exact height (3.5rem plus the iOS safe-area inset) as bottom padding.
+**Mobile (below `md`):** a **fixed bottom navigation bar** with the three destinations, each an icon above a label, with a clear active state marked by colour _and_ a rule (never colour alone). The header collapses to the lockup and the locale switcher. Page content is never obscured: the bar is `fixed`, and the site layout reserves its exact height (3.5rem plus the iOS safe-area inset) as a spacer.
+
+**There is no footer**, on any page. A three-destination product has nothing to put in one, and the locale switcher is already in the header.
+
+Every destination gives immediate feedback. A pending navigation fades a small dot into the link it was clicked on (`useLinkStatus`), and each route has a `loading` skeleton shaped like the page it is fetching. Both collapse to static under `prefers-reduced-motion`.
 
 Removed from navigation entirely: Eʼlonlar, Boshqaruv paneli, Saqlanganlar, Uylarim as a separate item, and Admin. **The admin link is not rendered anywhere** — admins type `/admin`. It remains role-gated exactly as before.
 
@@ -95,10 +106,8 @@ Removed from navigation entirely: Eʼlonlar, Boshqaruv paneli, Saqlanganlar, Uyl
 | ----------------------------------------------------------------- | ------------------------------------------------- | ---------- |
 | `/[locale]`                                                       | The feed — all active listings                    | none       |
 | `/[locale]/listings/[id]`                                         | Listing detail                                    | none       |
-| `/[locale]/post`                                                  | Create a home (step 1 of posting)                 | required   |
-| `/[locale]/post/listing`                                          | Create the rental offer (step 3)                  | required   |
-| `/[locale]/edit/property/[id]`                                    | Edit a home + manage its photos (step 2)          | required   |
-| `/[locale]/edit/listing/[id]`                                     | Edit a rental offer                               | required   |
+| `/[locale]/post`                                                  | Post a listing — one page, one submit             | required   |
+| `/[locale]/edit/[propertyId]`                                     | The same form, prefilled                          | required   |
 | `/[locale]/profile`                                               | Profile hub                                       | required   |
 | `/[locale]/verify/[id]`                                           | Ownership verification — **unlinked**             | required   |
 | `/[locale]/admin`                                                 | Admin overview                                    | admin only |
@@ -109,6 +118,9 @@ Everything that disappeared redirects rather than 404s:
 
 - `/[locale]/listings` → `/[locale]`, **preserving every query parameter verbatim**, repeated keys included
 - `/[locale]/dashboard` and **every** path beneath it → `/[locale]/profile` (one optional catch-all, so old bookmarks to `/dashboard/favorites`, `/dashboard/profile`, `/dashboard/properties/new`, `/dashboard/listings/[id]/edit`, `/dashboard/homes/[id]/verify` and the rest all land somewhere sensible)
+- `/[locale]/post/listing` → `/[locale]/post`
+- `/[locale]/edit/property/[id]` → `/[locale]/edit/[id]`
+- `/[locale]/edit/listing/[id]` → `/[locale]/edit/[propertyId]`, resolved by an owner-scoped lookup (a non-owner gets a 404, never a hint that the listing exists)
 
 ---
 
@@ -155,23 +167,34 @@ The heart on a card or detail page saves a listing. A signed-out click prompts s
 
 ## Journey 2 — Poster (makler or owner)
 
-### 2.1 Posting a home
+### 2.1 Posting (`/uz/post`)
 
 "Eʼlon yuklash" → `/uz/post`. Signed out, the gate redirects to login with a return path and brings the user straight back.
 
-`/uz/post` is the **where** step: region, district (Tashkent city only), address line, and a map pin. Submitting saves a **draft** and returns to `/uz/profile`, where the new home appears as a card that names what is still missing.
+**One page, four sections, one submit.** It is not a wizard — everything is visible and editable at once:
 
-From that card:
+1. **Bogʻlanish maʼlumotlari** — name, phone, optional Telegram. **Rendered only when the profile is missing a name or phone.** A poster who already has both never sees this section.
+2. **Joylashuv** — region, district (Tashkent city only), address line, map pin.
+3. **Rasmlar** — multiple files with previews, reorder, cover selection. At least one is required.
+4. **Tafsilotlar** — title, description, content language, price, currency, period, rooms, area, floor, total floors, available-from date, amenities.
 
-- **Rasm qoʻshish** → `/uz/edit/property/[id]` — upload, reorder, set cover. At least one photo is required to publish; a draft may have none. The database refuses to make a listing active without a photo (`PH001`).
-- **Eʼlon berish** → `/uz/post/listing` — title, description, content language, price, currency, period, rooms, area, floor, total floors, available-from date, amenities.
-- **Publish** — from the card once a listing exists.
+One primary action, **Eʼlon berish**. On success the listing is `active` and publicly visible immediately, and the poster lands on its public page.
 
-This is three screens, and it is the flow R2 collapses into one. Until then it stays exactly as it is.
+#### How one click becomes four writes
 
-### 2.2 Editing
+Photos need a `property_id` for their storage path and for Storage RLS, and the database refuses to publish a listing whose property has no photo (`PH001`) or whose owner has no name and phone (`CT001`). So the order is forced: profile → property → photos → listing. It is still **one user action**, with the four phases listed on screen as they run.
 
-Same forms, prefilled, at `/uz/edit/property/[id]` and `/uz/edit/listing/[id]`. The map opens zoomed to the saved pin at building level. Editing a live home leaves it live. **Changing price or details does not reset the 30-day expiry — only republishing does.**
+Everything is validated on the client first, against the very same zod schemas the server uses. **Nothing is created until every section passes**, so a validation error can never leave a partial record.
+
+If a photo upload fails after the property was created, the run stops: **the listing is not published and the property is kept**. The button becomes **Qayta urinish** and a retry skips the phases that already succeeded, re-uploading only the files that have not landed. Nothing is re-entered. If the poster instead abandons the page, the property surfaces in Uylarim as **Tugallanmagan** — the same recovery, from the other direction.
+
+### 2.2 Editing (`/uz/edit/[propertyId]`)
+
+The same form, prefilled, keyed by property: one screen covers the home and its offer. The map opens zoomed to the saved pin at building level. Editing a live home leaves it live. **Changing price or details does not reset the 30-day expiry — only republishing does.**
+
+Photos are the one part that acts immediately rather than on submit: they are already-persisted rows against an existing property, so add, remove and reorder take effect as you make them, while Joylashuv and Tafsilotlar save together on **Saqlash**.
+
+Opening this route on a **Tugallanmagan** home is how it gets finished: with no listing to update, the submit creates and publishes one.
 
 ### 2.3 Publishing, pausing, expiry
 
@@ -189,9 +212,9 @@ Signed out → redirect to login with a return path.
 
 Signed in, one responsive page, three sections in order, at **every** viewport. Nothing here is hidden by screen size.
 
-1. **Uylarim** — the user's own homes, one card per home with its state badge, cover photo, address, price and expiry when live, view and reveal counts when live, and the actions appropriate to its state (Edit; Draft: Add photo / Publish, Delete; Live: Pause, View publicly; Paused: Resume, Delete; Expired: Republish, Delete). Nothing is ever silently disabled. Empty state offers "Eʼlon yuklash".
+1. **Uylarim** — the user's own homes, one card per home with its state badge, cover photo, address, price and expiry when live, view and reveal counts when live, and the actions appropriate to its state (Tugallanmagan: Tugallash, Delete; Live: Edit, Pause, View publicly; Paused: Edit, Resume, Delete; Expired: Edit, Republish, Delete). Nothing is ever silently disabled. Empty state offers "Eʼlon yuklash".
 2. **Saqlanganlar** — saved listings, moved here from their own route. Unavailable favorites are shown greyed with a remove action.
-3. **Sozlamalar** — the contact details a renter sees only after revealing a listing's contact (full name, phone, Telegram), then the locale switcher, then sign out. The contact form lives here because publishing is database-gated on name and phone; this is the only place a poster can clear that blocker.
+3. **Sozlamalar** — the contact details a renter sees only after revealing a listing's contact (full name, phone, Telegram), then sign out. The contact form lives here because publishing is database-gated on name and phone. There is no locale switcher: it is in the header on every page.
 
 This page **will grow into a public makler profile** in a later chunk — listing count, member since, ratings. The sections above are composed rather than inlined so that addition is purely additive. **None of it is built yet.**
 

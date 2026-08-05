@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { SORTS, type ListingFilters } from "@/features/discovery/search-params";
@@ -53,6 +53,9 @@ export function FilterBar({
 }) {
   const t = useTranslations("discovery");
   const router = useRouter();
+  // The search navigation is a transition, so the button can say it is working
+  // while the server re-runs the query.
+  const [searching, startSearch] = useTransition();
   const [regionId, setRegionId] = useState<number | "">(filters.region ?? "");
 
   const label = (o: Option) => (locale === "ru" ? o.name_ru : o.name_uz);
@@ -81,7 +84,7 @@ export function FilterBar({
     if (typeof sort === "string" && sort !== "newest") p.set("sort", sort);
 
     const qs = p.toString();
-    router.push(`/${qs ? `?${qs}` : ""}`);
+    startSearch(() => router.push(`/${qs ? `?${qs}` : ""}`));
   }
 
   return (
@@ -236,7 +239,9 @@ export function FilterBar({
               </fieldset>
 
               <div className="flex flex-wrap gap-2">
-                <Button type="submit">{t("search")}</Button>
+                <Button type="submit" loading={searching}>
+                  {t("search")}
+                </Button>
                 <Link href="/" className={buttonVariants({ variant: "ghost" })}>
                   {t("reset")}
                 </Link>
