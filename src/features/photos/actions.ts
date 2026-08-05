@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getLocale } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
+import { logActionError } from "@/lib/log";
 import { requireUser } from "@/features/auth/session";
 import { sniffImageType, extForMime } from "./magic-bytes";
 import { computePhash } from "./phash";
@@ -40,19 +41,35 @@ export async function uploadPropertyPhoto(
   const locale = await getLocale();
 
   const propertyId = z.uuid().safeParse(formData.get("property_id"));
-  if (!propertyId.success) return { ok: false, error: "uploadFailed" };
-
-  // 1. Ownership (also enforced by Storage RLS; this gives a clean error).
-  if (!(await ownsProperty(supabase, user.id, propertyId.data))) {
+  if (!propertyId.success) {
+    logActionError("photos.upload/property_id", propertyId.error);
     return { ok: false, error: "uploadFailed" };
   }
 
+  // 1. Ownership (also enforced by Storage RLS; this gives a clean error).
+  if (!(await ownsProperty(supabase, user.id, propertyId.data))) {
+    logActionError("photos.upload/ownership", new Error("not the owner"), {
+      property_id: propertyId.data,
+    });
+    return { ok: false, error: "notOwner" };
+  }
+
   const file = formData.get("file");
-  if (!(file instanceof File)) return { ok: false, error: "uploadFailed" };
+  if (!(file instanceof File)) {
+    logActionError("photos.upload/file", new Error("no file in form data"), {
+      property_id: propertyId.data,
+    });
+    return { ok: false, error: "uploadFailed" };
+  }
   const bytes = new Uint8Array(await file.arrayBuffer());
 
   // 2. Hard byte-size limit.
-  if (bytes.byteLength === 0) return { ok: false, error: "uploadFailed" };
+  if (bytes.byteLength === 0) {
+    logActionError("photos.upload/size", new Error("empty file"), {
+      property_id: propertyId.data,
+    });
+    return { ok: false, error: "uploadFailed" };
+  }
   if (bytes.byteLength > MAX_BYTES) return { ok: false, error: "fileTooLarge" };
 
   // 3. Magic-byte validation — trust the bytes, not the extension/MIME.
@@ -76,7 +93,17 @@ export async function uploadPropertyPhoto(
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
     .upload(path, Buffer.from(bytes), { contentType: mime, upsert: false });
-  if (uploadError) return { ok: false, error: "uploadFailed" };
+  if (uploadError) {
+    // The one call in this action that reaches a different service. Its error
+    // (Storage RLS refusal, bucket MIME/size rule, network) never surfaced
+    // anywhere before — the host just saw "Yuklashda xatolik".
+    logActionError("photos.upload/storage", uploadError, {
+      property_id: propertyId.data,
+      mime,
+      bytes: bytes.byteLength,
+    });
+    return { ok: false, error: "uploadFailed" };
+  }
 
   const { data: maxRow } = await supabase
     .from("property_photos")
@@ -97,6 +124,10 @@ export async function uploadPropertyPhoto(
   // 8. Partial-failure cleanup: object uploaded but row failed → remove object
   //    so no orphan is left behind.
   if (insertError) {
+    logActionError("photos.upload/row", insertError, {
+      property_id: propertyId.data,
+      display_order: nextOrder,
+    });
     await supabase.storage.from(BUCKET).remove([path]);
     return { ok: false, error: "uploadFailed" };
   }

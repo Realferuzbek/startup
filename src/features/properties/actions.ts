@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getLocale } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
+import { logActionError } from "@/lib/log";
 import { requireUser } from "@/features/auth/session";
 import { makePropertySchema, type PropertyFormState } from "./schema";
 
@@ -17,11 +18,36 @@ export type PropertyResult =
 function firstErrorKey(issues: z.core.$ZodIssue[]): string {
   const issue = issues[0];
   const field = issue?.path[0];
+  if (field === "region_id") return "regionRequired";
   if (field === "district_id") return "districtRequired";
   if (field === "address_line") return "addressInvalid";
   if (field === "latitude" || field === "longitude")
     return "locationOutOfBounds";
   return "errorGeneric";
+}
+
+// Every way the database can refuse a property write, named. Without this each
+// one arrived as `errorGeneric`, which is why a posting failure could not be
+// told apart from any other failure.
+//   DR001 = the district does not belong to the region (integrity trigger)
+//   23514 = the only remaining CHECK on properties: coordinates out of bounds
+//   23503 = foreign key: the region or district id does not exist
+//   23502 = not-null: owner_id absent, i.e. the RPC ran without a session
+//   42501 = RLS refused the row (the property is not the caller's)
+function mapPropertyDbError(code: string | undefined): string {
+  switch (code) {
+    case "DR001":
+      return "districtRegionMismatch";
+    case "23514":
+      return "locationOutOfBounds";
+    case "23503":
+      return "regionInvalid";
+    case "23502":
+    case "42501":
+      return "notOwner";
+    default:
+      return "errorGeneric";
+  }
 }
 
 async function tashkentCityRegionId(
@@ -94,7 +120,14 @@ export async function createPostProperty(
     p_longitude: result.data.longitude,
   });
   if (error || !data) {
-    return { ok: false, error: "errorGeneric" };
+    // The shape of the input, never its content: enough to reproduce the
+    // rejection without putting an address or a pin in a log.
+    logActionError("properties.create/rpc", error, {
+      region_id: result.data.region_id,
+      has_district: result.data.district_id !== null,
+      returned_id: Boolean(data),
+    });
+    return { ok: false, error: mapPropertyDbError(error?.code) };
   }
 
   return { ok: true, id: data };
@@ -129,7 +162,18 @@ export async function updatePostProperty(
     p_longitude: result.data.longitude,
   });
   if (error) {
-    return { ok: false, error: "errorGeneric" };
+    logActionError("properties.update/rpc", error, {
+      property_id: id.data,
+      region_id: result.data.region_id,
+      has_district: result.data.district_id !== null,
+    });
+    // update_property raises no_data_found (P0002) when the row is not the
+    // caller's — RLS narrowed the UPDATE to zero rows.
+    return {
+      ok: false,
+      error:
+        error.code === "P0002" ? "notOwner" : mapPropertyDbError(error.code),
+    };
   }
 
   revalidatePath(`/${locale}/profile`);
@@ -164,7 +208,12 @@ export async function deleteProperty(
     .delete()
     .eq("id", id.data);
   if (error) {
-    return { status: "error", error: "errorGeneric" };
+    logActionError("properties.delete", error, { property_id: id.data });
+    // 23503 = the BEFORE DELETE guard: the property still has listings.
+    return {
+      status: "error",
+      error: error.code === "23503" ? "deleteBlocked" : "errorGeneric",
+    };
   }
 
   revalidatePath(`/${locale}/profile`);

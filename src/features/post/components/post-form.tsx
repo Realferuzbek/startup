@@ -106,6 +106,8 @@ const NAMESPACE: Record<string, string> = {
   phoneTaken: "profile",
   regionRequired: "property",
   districtRequired: "property",
+  districtRegionMismatch: "property",
+  regionInvalid: "property",
   addressInvalid: "property",
   locationRequired: "property",
   locationOutOfBounds: "property",
@@ -185,6 +187,12 @@ export function PostForm({
   const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(
     initial?.propertyId ?? null,
   );
+  // Which phase is in flight. The outer catch needs it: a server action that
+  // REJECTS (the request itself failed — a 500, a stale deployment, a dropped
+  // connection) never reaches the `if (!res.ok)` branch, so without this the
+  // phase stayed frozen on "running" and the page said only "errorGeneric".
+  // That combination is what made a real failure impossible to place.
+  const runningPhase = useRef<Phase["key"] | null>(null);
 
   const set = <K extends keyof PostValues>(key: K, value: PostValues[K]) =>
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -214,6 +222,7 @@ export function PostForm({
         // `needsPhotos` and `photosRequired` both mean "add a photo first".
         if (key === "needsPhotos") return tPhoto("cannotPublish");
         if (key === "photosRequired") return t("photosRequired");
+        if (key === "requestFailed") return t("requestFailed");
         return t("errorGeneric");
     }
   }
@@ -225,9 +234,24 @@ export function PostForm({
   const invalid = (field: string) => (errors[field] ? true : undefined);
 
   function updatePhase(key: Phase["key"], patch: Partial<Phase>) {
+    if (patch.state === "running") runningPhase.current = key;
+    else if (patch.state && key === runningPhase.current) {
+      runningPhase.current = null;
+    }
     setPhases((prev) =>
       prev ? prev.map((p) => (p.key === key ? { ...p, ...patch } : p)) : prev,
     );
+  }
+
+  // A refused property write. Field-specific keys land next to their input;
+  // everything else (an RLS refusal, an unmapped database code) goes to the
+  // page alert, because a message under the region select would be a lie.
+  function failProperty(key: string) {
+    updatePhase("property", { state: "failed" });
+    const field = propertyField(key);
+    if (field) setErrors({ [field]: key });
+    else setFormError(key);
+    setSubmitting(false);
   }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -294,18 +318,14 @@ export function PostForm({
           propertyFormData(values, initial.propertyId),
         );
         if (!res.ok) {
-          updatePhase("property", { state: "failed" });
-          setErrors({ [propertyField(res.error)]: res.error });
-          setSubmitting(false);
+          failProperty(res.error);
           return;
         }
         propertyId = initial.propertyId;
       } else if (!propertyId) {
         const res = await createPostProperty(propertyFormData(values));
         if (!res.ok) {
-          updatePhase("property", { state: "failed" });
-          setErrors({ [propertyField(res.error)]: res.error });
-          setSubmitting(false);
+          failProperty(res.error);
           return;
         }
         propertyId = res.id;
@@ -366,8 +386,17 @@ export function PostForm({
 
       // The public page the renter sees — proof the post is genuinely live.
       router.push(`/listings/${res.id}`);
-    } catch {
-      setFormError("errorGeneric");
+    } catch (err) {
+      // Reaching here means the request itself failed, not that the server
+      // refused the data — every refusal returns { ok: false }. Mark the phase
+      // that was in flight so the host can see WHERE it broke, keep the real
+      // error in the console for a bug report, and say "try again" rather than
+      // the same generic sentence every other failure uses.
+      console.error("[post] submit failed", err);
+      if (runningPhase.current) {
+        updatePhase(runningPhase.current, { state: "failed" });
+      }
+      setFormError("requestFailed");
       setSubmitting(false);
     }
   }
@@ -733,10 +762,15 @@ function contactField(key: string | undefined): string {
   return "full_name";
 }
 
-function propertyField(key: string): string {
-  if (key === "districtRequired") return "district_id";
+// The field a property error belongs next to, or null when it describes the
+// request as a whole (an RLS refusal, an unmapped database error) and therefore
+// belongs in the page-level alert rather than under an input the host cannot fix.
+function propertyField(key: string): string | null {
+  if (key === "districtRequired" || key === "districtRegionMismatch")
+    return "district_id";
+  if (key === "regionRequired" || key === "regionInvalid") return "region_id";
   if (key === "addressInvalid") return "address_line";
   if (key === "locationRequired" || key === "locationOutOfBounds")
     return "location";
-  return "region_id";
+  return null;
 }

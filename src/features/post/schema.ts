@@ -108,10 +108,16 @@ export function validatePost(
   if (!property.success) {
     for (const issue of property.error.issues) {
       const field = String(issue.path[0] ?? "");
-      const key = PROPERTY_KEY[field];
-      if (key && !errors[field]) errors[field] = key;
-      if (!key && field === "region_id" && !errors.region_id) {
-        errors.region_id = "regionRequired";
+      if (field === "region_id") {
+        errors.region_id ??= "regionRequired";
+      } else if (PROPERTY_KEY[field]) {
+        errors[field] ??= PROPERTY_KEY[field];
+      } else {
+        // Never drop an issue. An unnamed one used to vanish here, so the
+        // client believed the form was valid while the server — running the
+        // SAME schema — refused it, with nothing on screen to explain why.
+        // region_id always renders a message, so it is where this stays visible.
+        errors.region_id ??= "errorGeneric";
       }
     }
   }
@@ -141,8 +147,14 @@ export function validatePost(
   if (!listing.success) {
     for (const issue of listing.error.issues) {
       const field = String(issue.path[0] ?? "");
-      const key = LISTING_KEY[field];
-      if (key && !errors[field]) errors[field] = key;
+      if (LISTING_KEY[field]) {
+        errors[field] ??= LISTING_KEY[field];
+      } else {
+        // Same rule as the property section: an unnamed issue is shown, not
+        // dropped, so client and server can never disagree about validity.
+        // `title` is the first rendered field of the details section.
+        errors.title ??= "errorGeneric";
+      }
     }
   }
 

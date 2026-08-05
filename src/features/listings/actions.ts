@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getLocale } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
+import { logActionError } from "@/lib/log";
 import { requireUser } from "@/features/auth/session";
 import { listingSchema, type ListingFormState } from "./schema";
 import type { ListingStatus } from "./queries";
@@ -159,6 +160,10 @@ export async function publishNewListing(
     .single();
 
   if (error || !data) {
+    logActionError("listings.publishNew/insert", error, {
+      property_id: d.property_id,
+      amenities: d.amenity_ids.length,
+    });
     return { ok: false, error: mapListingError(error?.code) };
   }
 
@@ -217,7 +222,8 @@ export async function updatePostListing(
     p_amenity_ids: d.amenity_ids,
   });
   if (error) {
-    return { ok: false, error: "errorGeneric" };
+    logActionError("listings.update/rpc", error, { listing_id: id.data });
+    return { ok: false, error: mapListingError(error.code) };
   }
 
   const { data: row } = await supabase
@@ -232,6 +238,9 @@ export async function updatePostListing(
       .update({ status: "active" })
       .eq("id", id.data);
     if (publishError) {
+      logActionError("listings.update/publish", publishError, {
+        listing_id: id.data,
+      });
       return { ok: false, error: mapListingError(publishError.code) };
     }
   }
@@ -262,6 +271,10 @@ async function changeStatus(
     .eq("id", id.data)
     .select("id");
   if (error) {
+    logActionError("listings.changeStatus", error, {
+      listing_id: id.data,
+      status,
+    });
     return { status: "error", error: mapListingError(error.code) };
   }
   if (!data || data.length === 0) {

@@ -43,7 +43,9 @@
       "verified": "Tasdiqlangan",
       "rejected": "Rad etilgan"
     },
-    "regionRequired": "Viloyatni tanlang."
+    "regionRequired": "Viloyatni tanlang.",
+    "districtRegionMismatch": "Tanlangan tuman bu viloyatga tegishli emas. Tumanni qaytadan tanlang.",
+    "regionInvalid": "Tanlangan viloyat yoki tuman topilmadi. Qaytadan tanlang."
   },
   "nav": {
     "primary": "Asosiy menyu",
@@ -137,7 +139,8 @@
     "photoProgress": "{done}/{total}",
     "photosRequired": "Kamida bitta rasm qoʻshing.",
     "partialFailure": "Uy saqlandi — faqat qolgan rasmlar yuklanadi.",
-    "errorGeneric": "Xatolik yuz berdi. Qaytadan urinib koʻring."
+    "errorGeneric": "Xatolik yuz berdi. Qaytadan urinib koʻring.",
+    "requestFailed": "Soʻrov serverga yetib bormadi. Sahifani yangilab, qaytadan urinib koʻring."
   },
   "discovery": {
     "browseTitle": "Ijaraga uy-joy",

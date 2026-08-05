@@ -734,7 +734,8 @@ begin
 end $$;
 
 -- (16) A district that does not belong to the property's region is rejected at
---      the DB layer (integrity trigger → SQLSTATE 23514).
+--      the DB layer (integrity trigger → SQLSTATE DR001, its own code so the
+--      app can tell it apart from the coordinate-bounds CHECK, which is 23514).
 do $$
 declare
   did_raise boolean := false;
@@ -754,9 +755,73 @@ begin
   end;
   if not did_raise then
     raise exception 'FAIL(16): district from another region was not rejected';
-  elsif err_state <> '23514' then
+  elsif err_state <> 'DR001' then
     raise exception
-      'FAIL(16): district-region mismatch raised SQLSTATE % (expected 23514)', err_state;
+      'FAIL(16): district-region mismatch raised SQLSTATE % (expected DR001)', err_state;
+  end if;
+end $$;
+
+-- (16a) The other half of the same rule, and the one no test covered: districts
+--       exist for Tashkent city ONLY, so a property in any other region has a
+--       NULL district and MUST be accepted. Every property created during
+--       development was in Tashkent, so this path had never been exercised.
+do $$
+declare
+  new_id uuid;
+  d_id smallint;
+  lat double precision;
+  lng double precision;
+begin
+  new_id := public.create_property(
+    (select id from public.regions where slug = 'jizzakh')::smallint,
+    null,                                  -- no district: Jizzakh has none
+    'Jizzakh, no district',
+    40.1158,
+    67.8422
+  );
+
+  select district_id, latitude, longitude into d_id, lat, lng
+  from public.properties_with_coords
+  where id = new_id;
+
+  if d_id is not null then
+    raise exception 'FAIL(16a): district_id stored as % (expected null)', d_id;
+  end if;
+  if lat is null or abs(lat - 40.1158) > 0.0001
+     or lng is null or abs(lng - 67.8422) > 0.0001 then
+    raise exception
+      'FAIL(16a): Jizzakh coordinate round-tripped as %, % (expected 40.1158, 67.8422)',
+      lat, lng;
+  end if;
+end $$;
+
+-- (16b) A NULL district must stay legal on UPDATE too — the edit form sends the
+--       same shape, and the trigger fires on both INSERT and UPDATE.
+do $$
+declare
+  new_id uuid;
+  d_id smallint;
+begin
+  new_id := public.create_property(
+    (select id from public.regions where slug = 'tashkent-city')::smallint,
+    (select id from public.districts where slug = 'chilonzor')::smallint,
+    'Moving out of Tashkent',
+    41.311,
+    69.279
+  );
+
+  perform public.update_property(
+    new_id,
+    (select id from public.regions where slug = 'samarkand')::smallint,
+    null,                                  -- district cleared with the region
+    'Samarkand, no district',
+    39.6542,
+    66.9597
+  );
+
+  select district_id into d_id from public.properties where id = new_id;
+  if d_id is not null then
+    raise exception 'FAIL(16b): district_id survived as % (expected null)', d_id;
   end if;
 end $$;
 
