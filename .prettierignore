@@ -1,0 +1,7 @@
+.next
+node_modules
+next-env.d.ts
+package-lock.json
+src/types/database.ts
+supabase/.temp
+.claude

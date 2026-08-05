@@ -1,0 +1,12 @@
+-- The property_photos owner policy's USING/WITH CHECK contains a SUBQUERY on
+-- public.properties that reads owner_id. Unlike a direct column reference in a
+-- policy expression (evaluated by the system), a subquery is executed with the
+-- CALLER's privileges — so now that anon is column-restricted on properties (no
+-- owner_id), anon evaluating this policy while selecting property_photos raised
+-- "permission denied for table properties".
+--
+-- Owner policies are for authenticated users only (auth.uid() is null for anon,
+-- so anon can never match them anyway). Scoping the policy to `authenticated`
+-- means anon no longer evaluates the properties subquery. Anonymous read is
+-- still served by property_photos_select_public.
+alter policy property_photos_owner_all on public.property_photos to authenticated;

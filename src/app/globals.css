@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+/*
+  Makleer design system — locked tokens (see .claude/skills/design-system).
+  Light mode only for now; colors are CSS custom properties on :root and mapped
+  through @theme inline (var references), so a dark mode can be added later by
+  overriding the :root values without touching a single component.
+
+  shadcn's default token names are kept as thin aliases over our palette so the
+  pre-design-system pages keep working — there is ONE source of truth (the DS
+  tokens below), not two competing systems.
+*/
+
+@theme inline {
+  /* ── Design-system color utilities (bg-paper, text-ink, border-rule, …) ── */
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-registry: var(--registry);
+  --color-registry-soft: var(--registry-soft);
+  --color-verified: var(--verified);
+  --color-verified-soft: var(--verified-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+
+  /* ── shadcn compatibility aliases → DS tokens ── */
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--registry);
+  --color-primary-foreground: var(--surface);
+  --color-secondary: var(--registry-soft);
+  --color-secondary-foreground: var(--registry);
+  --color-muted: var(--rule);
+  --color-muted-foreground: var(--ink-muted);
+  --color-accent: var(--registry-soft);
+  --color-accent-foreground: var(--registry);
+  --color-destructive: var(--danger);
+  --color-border: var(--rule);
+  --color-input: var(--rule-strong);
+  --color-ring: var(--registry);
+
+  /* ── Fonts (self-hosted by next/font; variables set on <html>) ── */
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+@theme {
+  /* ── Radius — deliberately tight (registry look) ── */
+  --radius-sm: 2px; /* badges, tags */
+  --radius-md: 4px; /* cards, inputs, buttons */
+  --radius-lg: 6px; /* modals, large panels */
+
+  /* ── Type scale (IBM Plex Sans; mono for numeric/identifier data) ── */
+  --text-display: 2.5rem; /* 40 — landing hero only */
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 600;
+  --text-h1: 1.875rem; /* 30 */
+  --text-h1--line-height: 1.2;
+  --text-h1--font-weight: 600;
+  --text-h2: 1.375rem; /* 22 */
+  --text-h2--line-height: 1.3;
+  --text-h2--font-weight: 500;
+  --text-h3: 1.125rem; /* 18 */
+  --text-h3--line-height: 1.4;
+  --text-h3--font-weight: 500;
+  --text-body: 1rem; /* 16 */
+  --text-body--line-height: 1.6;
+  --text-small: 0.875rem; /* 14 */
+  --text-small--line-height: 1.5;
+  --text-caption: 0.75rem; /* 12 */
+  --text-caption--line-height: 1.4;
+  --text-button: 0.9375rem; /* 15 — button label, medium */
+  --text-button--line-height: 1;
+  --text-button--font-weight: 500;
+  --text-price: 1.0625rem; /* 17 — card prices, mono */
+  --text-price--line-height: 1.3;
+  --text-label: 0.6875rem; /* 11 — verified label, mono (named `label` to avoid
+                              colliding with the `text-verified` color utility) */
+  --text-label--line-height: 1;
+  --text-label--letter-spacing: 0.06em;
+}
+
+:root {
+  /* Palette — the only colors in the product. No gradients, ever. */
+  --paper: #f7f8fa;
+  --surface: #ffffff;
+  --ink: #0f1720;
+  --ink-secondary: #4a5561;
+  --ink-muted: #7a8592;
+  --rule: #e2e6eb;
+  --rule-strong: #c9d0d8;
+  --registry: #1b4b8f;
+  --registry-soft: #eaf0f8;
+  --verified: #0f6e56;
+  --verified-soft: #e4f2ec;
+  --danger: #a32d2d;
+  --danger-soft: #fbeded;
+  --warning: #854f0b;
+  --warning-soft: #fbf1e0;
+}
+
+@layer base {
+  * {
+    border-color: var(--rule);
+  }
+  body {
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
+}
+
+/* Reduced motion is non-negotiable: collapse every transition/animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
